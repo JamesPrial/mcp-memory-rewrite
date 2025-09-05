@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "memory": {
+      "comment": "Knowledge Graph Memory Server - Docker Container",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "mcp-memory-data:/data",
+        "mcp-memory-server:latest"
+      ]
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "memory": {
+      "comment": "Knowledge Graph Memory Server - SQLite Implementation",
+      "command": "/usr/local/bin/mcp-memory-server",
+      "args": [],
+      "env": {
+        "MEMORY_DB_PATH": "${HOME}/.mcp-memory/memory.db"
+      }
+    }
+  }
+}
