@@ -329,19 +329,8 @@ def test_benchmark_db_size_http(server_bin: Path, tmp_path: Path):
     # Measure resulting DB file size after dataset creation
     N = _scale(1200)
     db_path = tmp_path / "memory.db"
-    env = temp_db_env(tmp_path)
-    port = get_free_port()
-    proc = subprocess.Popen(
-        [str(server_bin), "-http", f"127.0.0.1:{port}"],
-        cwd=str(REPO_ROOT),
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
-        text=True,
-    )
+    proc, port = _prep_http(server_bin, tmp_path)
     try:
-        wait_port("127.0.0.1", port)
         client = MCPHTTPStreamableClient("127.0.0.1", port)
         client.initialize(); client.send_initialized()
         ents = [

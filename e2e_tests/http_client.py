@@ -19,7 +19,6 @@ class MCPHTTPStreamableClient:
     def __init__(self, host: str, port: int, protocol_version: str = "2025-06-18"):
         self.host = host
         self.port = port
-        self.conn = http.client.HTTPConnection(host, port, timeout=30)
         self.protocol_version = protocol_version
         self.session_id: str = ""
         self._next_id = 1
@@ -29,6 +28,8 @@ class MCPHTTPStreamableClient:
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
             "Mcp-Protocol-Version": self.protocol_version,
+            # Avoid persistent connections to simplify server behavior in tests
+            "Connection": "close",
         }
         if self.session_id:
             h["Mcp-Session-Id"] = self.session_id
@@ -36,8 +37,9 @@ class MCPHTTPStreamableClient:
 
     def _send_and_read(self, payload: Json, expect_response: bool = True) -> Optional[Json]:
         body = json.dumps(payload)
-        self.conn.request("POST", "/", body=body.encode("utf-8"), headers=self._headers())
-        resp = self.conn.getresponse()
+        conn = http.client.HTTPConnection(self.host, self.port, timeout=30)
+        conn.request("POST", "/", body=body.encode("utf-8"), headers=self._headers())
+        resp = conn.getresponse()
 
         # capture session id if provided
         sid = resp.getheader("Mcp-Session-Id")
@@ -48,15 +50,21 @@ class MCPHTTPStreamableClient:
             raise RuntimeError(f"Session ID changed: {self.session_id} -> {sid}")
 
         if resp.status in (202, 204) or not expect_response:
-            resp.read()  # drain
+            try:
+                resp.read()  # drain
+            finally:
+                resp.close()
+                conn.close()
             return None
 
         ctype = (resp.getheader("Content-Type") or "").split(";")[0].strip()
         if ctype == "application/json":
             data = resp.read()
-            if not data:
-                return None
-            return json.loads(data)
+            try:
+                return json.loads(data) if data else None
+            finally:
+                resp.close()
+                conn.close()
         elif ctype == "text/event-stream":
             # parse SSE events until we get a JSON-RPC message
             buf = b""
@@ -82,21 +90,32 @@ class MCPHTTPStreamableClient:
                                 if not expect_response:
                                     continue
                                 if m.get("id") == target_id:
-                                    resp.close()
-                                    return m
+                                    try:
+                                        return m
+                                    finally:
+                                        resp.close()
+                                        conn.close()
                         elif isinstance(msg, dict):
                             if not expect_response:
                                 continue
                             if msg.get("id") == target_id:
-                                resp.close()
-                                return msg
+                                try:
+                                    return msg
+                                finally:
+                                    resp.close()
+                                    conn.close()
                 # ignore other event fields (id:, event:, etc.)
             # if we exit without returning, drain
             resp.close()
+            conn.close()
             return None
         else:
             data = resp.read()
-            raise RuntimeError(f"Unexpected content-type {ctype}, status={resp.status}, body={data[:200]!r}")
+            try:
+                raise RuntimeError(f"Unexpected content-type {ctype}, status={resp.status}, body={data[:200]!r}")
+            finally:
+                resp.close()
+                conn.close()
 
     def initialize(self, client_name: str = "e2e-tests", version: str = "0.0.1") -> Json:
         rid = self._next_id
@@ -151,4 +170,3 @@ class MCPHTTPStreamableClient:
     def parse_text_json(result_obj: Dict[str, Any]) -> Any:
         txt = MCPHTTPStreamableClient.parse_text_content(result_obj)
         return json.loads(txt) if txt else None
-
