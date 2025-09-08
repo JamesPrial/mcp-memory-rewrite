@@ -39,7 +39,16 @@ class MCPHTTPStreamableClient:
         body = json.dumps(payload)
         conn = http.client.HTTPConnection(self.host, self.port, timeout=30)
         conn.request("POST", "/", body=body.encode("utf-8"), headers=self._headers())
-        resp = conn.getresponse()
+        
+        try:
+            resp = conn.getresponse()
+        except http.client.BadStatusLine as e:
+            # Handle case where server closes connection immediately (e.g., for notifications)
+            # BadStatusLine with message "0" means the server closed without sending a response
+            if not expect_response and str(e).strip() in ("0", ""):
+                conn.close()
+                return None
+            raise
 
         # capture session id if provided
         sid = resp.getheader("Mcp-Session-Id")
