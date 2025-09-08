@@ -14,45 +14,45 @@ type Server struct {
 }
 
 type CreateEntitiesParams struct {
-	Entities []database.EntityWithObservations `json:"entities" jsonschema:"required,description=Array of entities to create"`
+	Entities []database.EntityWithObservations `json:"entities" jsonschema:"description:Array of entities to create"`
 }
 
 type CreateRelationsParams struct {
-	Relations []database.RelationDTO `json:"relations" jsonschema:"required,description=Array of relations to create"`
+	Relations []database.RelationDTO `json:"relations" jsonschema:"description:Array of relations to create"`
 }
 
 type AddObservationsParams struct {
-	Observations []ObservationInput `json:"observations" jsonschema:"required,description=Array of observations to add"`
+	Observations []ObservationInput `json:"observations" jsonschema:"description:Array of observations to add"`
 }
 
 type ObservationInput struct {
-	EntityName string   `json:"entityName" jsonschema:"required,description=Name of the entity"`
-	Contents   []string `json:"contents" jsonschema:"required,description=Array of observations to add"`
+	EntityName string   `json:"entityName" jsonschema:"description:Name of the entity"`
+	Contents   []string `json:"contents" jsonschema:"description:Array of observations to add"`
 }
 
 type DeleteEntitiesParams struct {
-	EntityNames []string `json:"entityNames" jsonschema:"required,description=Array of entity names to delete"`
+	EntityNames []string `json:"entityNames" jsonschema:"description:Array of entity names to delete"`
 }
 
 type DeleteObservationsParams struct {
-	Deletions []DeletionInput `json:"deletions" jsonschema:"required,description=Array of deletions to perform"`
+	Deletions []DeletionInput `json:"deletions" jsonschema:"description:Array of deletions to perform"`
 }
 
 type DeletionInput struct {
-	EntityName   string   `json:"entityName" jsonschema:"required,description=Name of the entity"`
-	Observations []string `json:"observations" jsonschema:"required,description=Array of observations to delete"`
+	EntityName   string   `json:"entityName" jsonschema:"description:Name of the entity"`
+	Observations []string `json:"observations" jsonschema:"description:Array of observations to delete"`
 }
 
 type DeleteRelationsParams struct {
-	Relations []database.RelationDTO `json:"relations" jsonschema:"required,description=Array of relations to delete"`
+	Relations []database.RelationDTO `json:"relations" jsonschema:"description:Array of relations to delete"`
 }
 
 type SearchNodesParams struct {
-	Query string `json:"query" jsonschema:"required,description=Search query to match against entity names types and observations"`
+	Query string `json:"query" jsonschema:"description:Search query to match against entity names types and observations"`
 }
 
 type OpenNodesParams struct {
-	Names []string `json:"names" jsonschema:"required,description=Array of entity names to retrieve"`
+	Names []string `json:"names" jsonschema:"description:Array of entity names to retrieve"`
 }
 
 // NewServer creates a new MCP memory server

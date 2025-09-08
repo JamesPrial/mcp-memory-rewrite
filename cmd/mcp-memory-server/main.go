@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,7 +17,14 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+var (
+	httpAddr = flag.String("http", "", "HTTP address to listen on (e.g., :8080). If not set, uses stdio")
+	sseMode  = flag.Bool("sse", false, "Use SSE (Server-Sent Events) for HTTP mode")
+)
+
 func main() {
+	flag.Parse()
+
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
@@ -34,7 +44,7 @@ func main() {
 	// Create MCP server
 	mcpServer := mcp.NewServer(
 		&mcp.Implementation{
-			Name:    "mcp-memory-rewrite",
+			Name:    "mcp-memory-server",
 			Version: "0.1.0",
 		},
 		nil,
@@ -54,15 +64,58 @@ func main() {
 	// Channel to signal when server is done
 	done := make(chan error, 1)
 
-	// Start the MCP server in a goroutine
-	go func() {
-		log.Println("MCP Memory Server starting...")
-		if err := mcpServer.Run(ctx, &mcp.StdioTransport{}); err != nil {
-			done <- err
-		} else {
-			done <- nil
-		}
-	}()
+	// Start the appropriate server based on flags
+	if *httpAddr != "" {
+		// HTTP mode
+		go func() {
+			var handler http.Handler
+			
+			if *sseMode {
+				log.Printf("MCP Memory Server starting in SSE mode on %s...", *httpAddr)
+				// SSE handler expects a function that returns the server
+				handler = mcp.NewSSEHandler(func(*http.Request) *mcp.Server {
+					return mcpServer
+				})
+			} else {
+				log.Printf("MCP Memory Server starting in HTTP mode on %s...", *httpAddr)
+				// Streamable HTTP handler for standard HTTP
+				handler = mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+					return mcpServer
+				}, nil)
+			}
+			
+			httpServer := &http.Server{
+				Addr:    *httpAddr,
+				Handler: handler,
+			}
+			
+			// Graceful shutdown for HTTP server
+			go func() {
+				<-ctx.Done()
+				shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := httpServer.Shutdown(shutdownCtx); err != nil {
+					log.Printf("HTTP server shutdown error: %v", err)
+				}
+			}()
+			
+			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				done <- fmt.Errorf("HTTP server error: %w", err)
+			} else {
+				done <- nil
+			}
+		}()
+	} else {
+		// Stdio mode (default)
+		go func() {
+			log.Println("MCP Memory Server starting in stdio mode...")
+			if err := mcpServer.Run(ctx, &mcp.StdioTransport{}); err != nil {
+				done <- err
+			} else {
+				done <- nil
+			}
+		}()
+	}
 
 	// Wait for either server error or interrupt signal
 	select {
@@ -73,7 +126,7 @@ func main() {
 		log.Println("Server stopped")
 	case sig := <-sigChan:
 		log.Printf("Received signal: %v. Shutting down gracefully...", sig)
-
+		
 		// Create a timeout context for shutdown
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
