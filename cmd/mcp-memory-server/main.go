@@ -32,11 +32,10 @@ func main() {
 	}
 
 	// Initialize database
-	db, err := database.NewDB(cfg.DBPath)
-	if err != nil {
-		log.Fatal("Failed to initialize database:", err)
-	}
-	defer db.Close()
+    db, err := database.NewDB(cfg.DBPath)
+    if err != nil {
+        log.Fatal("Failed to initialize database:", err)
+    }
 
 	// Create the server
 	srv := server.NewServer(db)
@@ -119,11 +118,15 @@ func main() {
 
 	// Wait for either server error or interrupt signal
 	select {
-	case err := <-done:
-		if err != nil {
-			log.Fatal("Server error:", err)
-		}
-		log.Println("Server stopped")
+    case err := <-done:
+        if err != nil {
+            log.Fatal("Server error:", err)
+        }
+        // Ensure graceful shutdown of server resources (DB, etc.)
+        if sErr := srv.Shutdown(context.Background()); sErr != nil {
+            log.Printf("Shutdown error: %v", sErr)
+        }
+        log.Println("Server stopped")
 	case sig := <-sigChan:
 		log.Printf("Received signal: %v. Shutting down gracefully...", sig)
 		

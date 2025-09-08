@@ -92,12 +92,7 @@ func TestAddObservations(t *testing.T) {
 	_, err := db.CreateEntities(context.Background(), entities)
 	assert.NoError(t, err)
 
-	additions := []struct {
-		EntityName string   `json:"entityName"`
-		Contents   []string `json:"contents"`
-	}{
-		{EntityName: "E1", Contents: []string{"obs2", "obs3"}},
-	}
+    additions := []ObservationAdditionInput{{EntityName: "E1", Contents: []string{"obs2", "obs3"}}}
 
 	added, err := db.AddObservations(context.Background(), additions)
 	assert.NoError(t, err)
@@ -110,12 +105,7 @@ func TestAddObservations(t *testing.T) {
 	assert.Len(t, added[0].AddedObservations, 0, "Should not add duplicate observations")
 
 	// Test adding to non-existent entity
-	additions = []struct {
-		EntityName string   `json:"entityName"`
-		Contents   []string `json:"contents"`
-	}{
-		{EntityName: "NON_EXISTENT", Contents: []string{"obs4"}},
-	}
+    additions = []ObservationAdditionInput{{EntityName: "NON_EXISTENT", Contents: []string{"obs4"}}}
 	_, err = db.AddObservations(context.Background(), additions)
 	assert.Error(t, err, "Should error when adding to non-existent entity")
 
@@ -154,12 +144,7 @@ func TestDeleteObservations(t *testing.T) {
 	_, err := db.CreateEntities(context.Background(), entities)
 	assert.NoError(t, err)
 
-	deletions := []struct {
-		EntityName   string   `json:"entityName"`
-		Observations []string `json:"observations"`
-	}{
-		{EntityName: "E1", Observations: []string{"obs1", "obs3"}},
-	}
+    deletions := []ObservationDeletionInput{{EntityName: "E1", Observations: []string{"obs1", "obs3"}}}
 	
 	err = db.DeleteObservations(context.Background(), deletions)
 	assert.NoError(t, err)
@@ -327,10 +312,10 @@ func TestDB_AddObservations_Table(t *testing.T) {
     }
     for _, tc := range cases {
         t.Run(tc.name, func(t *testing.T) {
-            // build argument with the exact anonymous struct type expected
-            arg := make([]struct{ EntityName string `json:"entityName"`; Contents []string `json:"contents"` }, len(tc.input))
+            // build argument using named type
+            arg := make([]ObservationAdditionInput, len(tc.input))
             for i, v := range tc.input {
-                arg[i] = struct{ EntityName string `json:"entityName"`; Contents []string `json:"contents"` }{EntityName: v.entity, Contents: v.contents}
+                arg[i] = ObservationAdditionInput{EntityName: v.entity, Contents: v.contents}
             }
             got, err := db.AddObservations(context.Background(), arg)
             if tc.wantErr { assert.Error(t, err); return }
@@ -392,10 +377,10 @@ func TestDB_DeleteObservations_Table(t *testing.T) {
             defer db.Close()
             _, err := db.CreateEntities(context.Background(), []EntityWithObservations{{Name: "A", EntityType: "T", Observations: []string{"o1","o2"}}})
             assert.NoError(t, err)
-            // build arg with the exact anonymous struct type expected
-            arg := make([]struct{ EntityName string `json:"entityName"`; Observations []string `json:"observations"` }, len(tc.del))
+            // build arg using named type
+            arg := make([]ObservationDeletionInput, len(tc.del))
             for i, v := range tc.del {
-                arg[i] = struct{ EntityName string `json:"entityName"`; Observations []string `json:"observations"` }{EntityName: v.entity, Observations: v.obs}
+                arg[i] = ObservationDeletionInput{EntityName: v.entity, Observations: v.obs}
             }
             err = db.DeleteObservations(context.Background(), arg)
             assert.NoError(t, err)
@@ -551,12 +536,7 @@ func TestDeleteObservations_NonexistentIsNoop(t *testing.T) {
     _, err := db.CreateEntities(context.Background(), []EntityWithObservations{{Name: "A", EntityType: "T", Observations: []string{"x"}}})
     assert.NoError(t, err)
 
-    err = db.DeleteObservations(context.Background(), []struct {
-        EntityName   string   `json:"entityName"`
-        Observations []string `json:"observations"`
-    }{
-        {EntityName: "A", Observations: []string{"does-not-exist"}},
-    })
+    err = db.DeleteObservations(context.Background(), []ObservationDeletionInput{{EntityName: "A", Observations: []string{"does-not-exist"}}})
     assert.NoError(t, err)
 
     g, err := db.ReadGraph(context.Background())
@@ -642,10 +622,7 @@ func TestAddObservations_DuplicateWithinSingleCall(t *testing.T) {
     _, err := db.CreateEntities(context.Background(), []EntityWithObservations{{Name: "A", EntityType: "T"}})
     assert.NoError(t, err)
 
-    added, err := db.AddObservations(context.Background(), []struct {
-        EntityName string   `json:"entityName"`
-        Contents   []string `json:"contents"`
-    }{{EntityName: "A", Contents: []string{"dup", "dup"}}})
+    added, err := db.AddObservations(context.Background(), []ObservationAdditionInput{{EntityName: "A", Contents: []string{"dup", "dup"}}})
     assert.NoError(t, err)
     assert.Len(t, added, 1)
     assert.Equal(t, []string{"dup"}, added[0].AddedObservations)

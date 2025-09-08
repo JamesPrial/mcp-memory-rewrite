@@ -40,6 +40,22 @@ type RelationDTO struct {
 }
 
 type KnowledgeGraph struct {
-	Entities  []EntityWithObservations `json:"entities"`
-	Relations []RelationDTO            `json:"relations"`
+    Entities  []EntityWithObservations `json:"entities"`
+    Relations []RelationDTO            `json:"relations"`
+}
+
+// Named types to replace anonymous structs in DB APIs for ergonomics
+type ObservationAdditionInput struct {
+    EntityName string   `json:"entityName"`
+    Contents   []string `json:"contents"`
+}
+
+type ObservationAdditionResult struct {
+    EntityName        string   `json:"entityName"`
+    AddedObservations []string `json:"addedObservations"`
+}
+
+type ObservationDeletionInput struct {
+    EntityName   string   `json:"entityName"`
+    Observations []string `json:"observations"`
 }

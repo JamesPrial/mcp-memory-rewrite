@@ -187,21 +187,16 @@ func (s *Server) handleCreateRelations(ctx context.Context, params CreateRelatio
 }
 
 func (s *Server) handleAddObservations(ctx context.Context, params AddObservationsParams) (*mcp.CallToolResult, any, error) {
-	// Convert to the format expected by the database
-	dbParams := make([]struct {
-		EntityName string   `json:"entityName"`
-		Contents   []string `json:"contents"`
-	}, len(params.Observations))
+    // Convert to the format expected by the database (named type)
+    dbParams := make([]database.ObservationAdditionInput, len(params.Observations))
+    for i, obs := range params.Observations {
+        dbParams[i] = database.ObservationAdditionInput{EntityName: obs.EntityName, Contents: obs.Contents}
+    }
 
-	for i, obs := range params.Observations {
-		dbParams[i].EntityName = obs.EntityName
-		dbParams[i].Contents = obs.Contents
-	}
-
-	results, err := s.db.AddObservations(ctx, dbParams)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to add observations: %w", err)
-	}
+    results, err := s.db.AddObservations(ctx, dbParams)
+    if err != nil {
+        return nil, nil, fmt.Errorf("failed to add observations: %w", err)
+    }
 
 	jsonData, _ := json.MarshalIndent(results, "", "  ")
 	return &mcp.CallToolResult{
@@ -224,20 +219,15 @@ func (s *Server) handleDeleteEntities(ctx context.Context, params DeleteEntities
 }
 
 func (s *Server) handleDeleteObservations(ctx context.Context, params DeleteObservationsParams) (*mcp.CallToolResult, any, error) {
-	// Convert to the format expected by the database
-	dbParams := make([]struct {
-		EntityName   string   `json:"entityName"`
-		Observations []string `json:"observations"`
-	}, len(params.Deletions))
+    // Convert to the format expected by the database (named type)
+    dbParams := make([]database.ObservationDeletionInput, len(params.Deletions))
+    for i, del := range params.Deletions {
+        dbParams[i] = database.ObservationDeletionInput{EntityName: del.EntityName, Observations: del.Observations}
+    }
 
-	for i, del := range params.Deletions {
-		dbParams[i].EntityName = del.EntityName
-		dbParams[i].Observations = del.Observations
-	}
-
-	if err := s.db.DeleteObservations(ctx, dbParams); err != nil {
-		return nil, nil, fmt.Errorf("failed to delete observations: %w", err)
-	}
+    if err := s.db.DeleteObservations(ctx, dbParams); err != nil {
+        return nil, nil, fmt.Errorf("failed to delete observations: %w", err)
+    }
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

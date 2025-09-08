@@ -180,23 +180,14 @@ func (db *DB) CreateRelations(ctx context.Context, relations []RelationDTO) ([]R
 	return created, tx.Commit()
 }
 
-func (db *DB) AddObservations(ctx context.Context, observations []struct {
-	EntityName string   `json:"entityName"`
-	Contents   []string `json:"contents"`
-}) ([]struct {
-	EntityName         string   `json:"entityName"`
-	AddedObservations []string `json:"addedObservations"`
-}, error) {
+func (db *DB) AddObservations(ctx context.Context, observations []ObservationAdditionInput) ([]ObservationAdditionResult, error) {
 	tx, err := db.conn.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 
-	results := []struct {
-		EntityName         string   `json:"entityName"`
-		AddedObservations []string `json:"addedObservations"`
-	}{}
+    results := []ObservationAdditionResult{}
 
 	for _, obs := range observations {
 		var entityID int64
@@ -232,13 +223,10 @@ func (db *DB) AddObservations(ctx context.Context, observations []struct {
 			added = append(added, content)
 		}
 
-		results = append(results, struct {
-			EntityName         string   `json:"entityName"`
-			AddedObservations []string `json:"addedObservations"`
-		}{
-			EntityName:         obs.EntityName,
-			AddedObservations: added,
-		})
+        results = append(results, ObservationAdditionResult{
+            EntityName:        obs.EntityName,
+            AddedObservations: added,
+        })
 	}
 
 	return results, tx.Commit()
@@ -261,10 +249,7 @@ func (db *DB) DeleteEntities(ctx context.Context, entityNames []string) error {
 	return err
 }
 
-func (db *DB) DeleteObservations(ctx context.Context, deletions []struct {
-	EntityName   string   `json:"entityName"`
-	Observations []string `json:"observations"`
-}) error {
+func (db *DB) DeleteObservations(ctx context.Context, deletions []ObservationDeletionInput) error {
 	tx, err := db.conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -357,7 +342,7 @@ func (db *DB) ReadGraph(ctx context.Context) (*KnowledgeGraph, error) {
 		}
 		entityMap[id] = entity.Name
 
-		obsRows, err := db.conn.QueryContext(ctx, "SELECT content FROM observations WHERE entity_id = ?", id)
+        obsRows, err := db.conn.QueryContext(ctx, "SELECT content FROM observations WHERE entity_id = ? ORDER BY id", id)
 		if err != nil {
 			return nil, err
 		}
@@ -377,10 +362,11 @@ func (db *DB) ReadGraph(ctx context.Context) (*KnowledgeGraph, error) {
 		graph.Entities = append(graph.Entities, entity)
 	}
 
-	relRows, err := db.conn.QueryContext(ctx, `
-		SELECT from_entity_id, to_entity_id, relation_type 
-		FROM relations
-	`)
+    relRows, err := db.conn.QueryContext(ctx, `
+        SELECT from_entity_id, to_entity_id, relation_type 
+        FROM relations
+        ORDER BY from_entity_id, to_entity_id, relation_type
+    `)
 	if err != nil {
 		return nil, err
 	}
@@ -415,15 +401,16 @@ func (db *DB) SearchNodes(ctx context.Context, query string) (*KnowledgeGraph, e
 
 	matchedEntityIDs := make(map[int64]bool)
 
-	rows, err := db.conn.QueryContext(ctx, `
-		SELECT DISTINCT e.id, e.name, e.entity_type
-		FROM entities e
-		LEFT JOIN observations o ON e.id = o.entity_id
-		WHERE 
-			e.name LIKE ? OR
-			e.entity_type LIKE ? OR
-			o.content LIKE ?
-	`, "%"+query+"%", "%"+query+"%", "%"+query+"%")
+    rows, err := db.conn.QueryContext(ctx, `
+        SELECT DISTINCT e.id, e.name, e.entity_type
+        FROM entities e
+        LEFT JOIN observations o ON e.id = o.entity_id
+        WHERE 
+            e.name LIKE ? OR
+            e.entity_type LIKE ? OR
+            o.content LIKE ?
+        ORDER BY e.name
+    `, "%"+query+"%", "%"+query+"%", "%"+query+"%")
 	if err != nil {
 		return nil, err
 	}
@@ -443,7 +430,7 @@ func (db *DB) SearchNodes(ctx context.Context, query string) (*KnowledgeGraph, e
 		matchedEntityIDs[id] = true
 		entityMap[id] = entity.Name
 
-		obsRows, err := db.conn.QueryContext(ctx, "SELECT content FROM observations WHERE entity_id = ?", id)
+        obsRows, err := db.conn.QueryContext(ctx, "SELECT content FROM observations WHERE entity_id = ? ORDER BY id", id)
 		if err != nil {
 			return nil, err
 		}
@@ -471,11 +458,12 @@ func (db *DB) SearchNodes(ctx context.Context, query string) (*KnowledgeGraph, e
 			args = append(args, id)
 		}
 
-		relQuery := fmt.Sprintf(`
-			SELECT from_entity_id, to_entity_id, relation_type 
-			FROM relations 
-			WHERE from_entity_id IN (%s) AND to_entity_id IN (%s)
-		`, strings.Join(placeholders, ","), strings.Join(placeholders, ","))
+        relQuery := fmt.Sprintf(`
+            SELECT from_entity_id, to_entity_id, relation_type 
+            FROM relations 
+            WHERE from_entity_id IN (%s) AND to_entity_id IN (%s)
+            ORDER BY from_entity_id, to_entity_id, relation_type
+        `, strings.Join(placeholders, ","), strings.Join(placeholders, ","))
 		
 		args = append(args, args...)
 		relRows, err := db.conn.QueryContext(ctx, relQuery, args...)
@@ -523,11 +511,12 @@ func (db *DB) OpenNodes(ctx context.Context, names []string) (*KnowledgeGraph, e
 		args[i] = name
 	}
 
-	query := fmt.Sprintf(`
-		SELECT id, name, entity_type 
-		FROM entities 
-		WHERE name IN (%s)
-	`, strings.Join(placeholders, ","))
+    query := fmt.Sprintf(`
+        SELECT id, name, entity_type 
+        FROM entities 
+        WHERE name IN (%s)
+        ORDER BY name
+    `, strings.Join(placeholders, ","))
 
 	rows, err := db.conn.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -547,7 +536,7 @@ func (db *DB) OpenNodes(ctx context.Context, names []string) (*KnowledgeGraph, e
 		entityMap[id] = entity.Name
 		entityIDs = append(entityIDs, id)
 
-		obsRows, err := db.conn.QueryContext(ctx, "SELECT content FROM observations WHERE entity_id = ?", id)
+        obsRows, err := db.conn.QueryContext(ctx, "SELECT content FROM observations WHERE entity_id = ? ORDER BY id", id)
 		if err != nil {
 			return nil, err
 		}
@@ -575,11 +564,12 @@ func (db *DB) OpenNodes(ctx context.Context, names []string) (*KnowledgeGraph, e
 			args = append(args, id)
 		}
 
-		relQuery := fmt.Sprintf(`
-			SELECT from_entity_id, to_entity_id, relation_type 
-			FROM relations 
-			WHERE from_entity_id IN (%s) AND to_entity_id IN (%s)
-		`, strings.Join(placeholders, ","), strings.Join(placeholders, ","))
+        relQuery := fmt.Sprintf(`
+            SELECT from_entity_id, to_entity_id, relation_type 
+            FROM relations 
+            WHERE from_entity_id IN (%s) AND to_entity_id IN (%s)
+            ORDER BY from_entity_id, to_entity_id, relation_type
+        `, strings.Join(placeholders, ","), strings.Join(placeholders, ","))
 		
 		args = append(args, args[:len(entityIDs)]...)
 		relRows, err := db.conn.QueryContext(ctx, relQuery, args...)
