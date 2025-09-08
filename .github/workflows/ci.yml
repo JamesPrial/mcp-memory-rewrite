@@ -34,9 +34,7 @@ jobs:
 
   e2e:
     name: End-to-End Tests (stdio/http/sse)
-    runs-on: ubuntu-latest
-    env:
-      GOCACHE: ${{ runner.temp }}/gocache
+    runs-on: ubuntu-latest\
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -68,8 +66,6 @@ jobs:
   bench:
     name: Benchmarks (matrix scales)
     runs-on: ubuntu-latest
-    env:
-      GOCACHE: ${{ runner.temp }}/gocache
     strategy:
       fail-fast: false
       matrix:
