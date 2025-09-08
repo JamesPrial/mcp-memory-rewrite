@@ -2,9 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ '**' ]  # Run on all branch pushes
   pull_request:
-    branches: [ '**' ]
+    branches: [ '**' ]  # Run on all pull requests
+  workflow_dispatch:    # Allow manual triggering
 
 jobs:
   go-test:
