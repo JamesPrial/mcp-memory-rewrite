@@ -89,6 +89,16 @@ go install ./cmd/mcp-memory-server
 
 - `MEMORY_DB_PATH`: Path to the SQLite database file (default: `~/.mcp-memory/memory.db`)
 
+## Python Test Dependencies
+
+Install Python deps for running E2E and benchmarks:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
 ## API
 
 ### Tools
