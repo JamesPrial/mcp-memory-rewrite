@@ -1,5 +1,7 @@
 # Knowledge Graph Memory Server (Go Implementation with SQLite)
 
+[![CI](https://github.com/jamesprial/mcp-memory-rewrite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jamesprial/mcp-memory-rewrite/actions/workflows/ci.yml)
+
 A Go implementation of the MCP memory server using SQLite for persistent storage, providing enhanced performance and reliability over the original JSON-based implementation.
 
 ## Key Improvements
@@ -310,6 +312,20 @@ Build and run:
 ```bash
 docker build -t mcp-memory-server .
 docker run -i -v mcp-memory-data:/data mcp-memory-server
+```
+
+## CI & Benchmarks
+
+- CI runs on GitHub Actions and includes:
+  - Go build + unit tests
+  - End-to-end tests across stdio, HTTP (streamable), and SSE
+  - Benchmarks at multiple scales (configurable via `E2E_BENCH_SCALE`)
+
+To run benchmarks locally with different scales:
+
+```bash
+pytest -q -m benchmark -s              # default scale 1
+E2E_BENCH_SCALE=3 pytest -q -m benchmark -s
 ```
 
 ## Migration from JSON

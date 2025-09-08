@@ -5,6 +5,8 @@
 *.so
 *.dylib
 
+.e2e_bin
+
 # Test binary, built with `go test -c`
 *.test
 
