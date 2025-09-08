@@ -93,10 +93,9 @@ def stdio_server(server_bin: Path, tmp_path: Path):
 @pytest.fixture()
 def http_server(server_bin: Path, tmp_path: Path):
     env = temp_db_env(tmp_path)
-    port = get_free_port()
-    addr = f"127.0.0.1:{port}"
+    port_path = tmp_path / "port.txt"
     proc = subprocess.Popen(
-        [str(server_bin), "-http", addr],
+        [str(server_bin), "-http", ":0", "-portfile", str(port_path)],
         cwd=str(REPO_ROOT),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
@@ -105,6 +104,12 @@ def http_server(server_bin: Path, tmp_path: Path):
         text=True,
     )
     try:
+        # Wait for portfile and connect
+        for _ in range(100):
+            if port_path.exists():
+                break
+            time.sleep(0.05)
+        port = int(port_path.read_text())
         wait_port("127.0.0.1", port)
         client = MCPHTTPStreamableClient("127.0.0.1", port)
         yield client
@@ -312,10 +317,9 @@ def test_http_error_and_misuse(http_server):
 @pytest.fixture()
 def http_sse_server(server_bin: Path, tmp_path: Path):
     env = temp_db_env(tmp_path)
-    port = get_free_port()
-    addr = f"127.0.0.1:{port}"
+    port_path = tmp_path / "port.txt"
     proc = subprocess.Popen(
-        [str(server_bin), "-http", addr, "-sse"],
+        [str(server_bin), "-http", ":0", "-sse", "-portfile", str(port_path)],
         cwd=str(REPO_ROOT),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
@@ -324,6 +328,11 @@ def http_sse_server(server_bin: Path, tmp_path: Path):
         text=True,
     )
     try:
+        for _ in range(100):
+            if port_path.exists():
+                break
+            time.sleep(0.05)
+        port = int(port_path.read_text())
         wait_port("127.0.0.1", port)
         client = MCPSSEClient("127.0.0.1", port)
         yield client

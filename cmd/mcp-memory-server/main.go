@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +21,7 @@ import (
 var (
 	httpAddr = flag.String("http", "", "HTTP address to listen on (e.g., :8080). If not set, uses stdio")
 	sseMode  = flag.Bool("sse", false, "Use SSE (Server-Sent Events) for HTTP mode")
+	portFile = flag.String("portfile", "", "If set with -http, write the actual bound TCP port to this file")
 )
 
 func main() {
@@ -32,10 +34,10 @@ func main() {
 	}
 
 	// Initialize database
-    db, err := database.NewDB(cfg.DBPath)
-    if err != nil {
-        log.Fatal("Failed to initialize database:", err)
-    }
+	db, err := database.NewDB(cfg.DBPath)
+	if err != nil {
+		log.Fatal("Failed to initialize database:", err)
+	}
 
 	// Create the server
 	srv := server.NewServer(db)
@@ -68,7 +70,7 @@ func main() {
 		// HTTP mode
 		go func() {
 			var handler http.Handler
-			
+
 			if *sseMode {
 				log.Printf("MCP Memory Server starting in SSE mode on %s...", *httpAddr)
 				// SSE handler expects a function that returns the server
@@ -82,12 +84,9 @@ func main() {
 					return mcpServer
 				}, nil)
 			}
-			
-			httpServer := &http.Server{
-				Addr:    *httpAddr,
-				Handler: handler,
-			}
-			
+
+			httpServer := &http.Server{Handler: handler}
+
 			// Graceful shutdown for HTTP server
 			go func() {
 				<-ctx.Done()
@@ -97,8 +96,21 @@ func main() {
 					log.Printf("HTTP server shutdown error: %v", err)
 				}
 			}()
-			
-			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+
+			// Allow :0 and write the bound port if requested
+			ln, err := net.Listen("tcp", *httpAddr)
+			if err != nil {
+				done <- fmt.Errorf("HTTP listen error: %w", err)
+				return
+			}
+			if *portFile != "" {
+				addr := ln.Addr().(*net.TCPAddr)
+				// Best-effort write
+				if err := os.WriteFile(*portFile, []byte(fmt.Sprintf("%d", addr.Port)), 0644); err != nil {
+					log.Printf("failed writing portfile: %v", err)
+				}
+			}
+			if err := httpServer.Serve(ln); err != nil && err != http.ErrServerClosed {
 				done <- fmt.Errorf("HTTP server error: %w", err)
 			} else {
 				done <- nil
@@ -118,18 +130,18 @@ func main() {
 
 	// Wait for either server error or interrupt signal
 	select {
-    case err := <-done:
-        if err != nil {
-            log.Fatal("Server error:", err)
-        }
-        // Ensure graceful shutdown of server resources (DB, etc.)
-        if sErr := srv.Shutdown(context.Background()); sErr != nil {
-            log.Printf("Shutdown error: %v", sErr)
-        }
-        log.Println("Server stopped")
+	case err := <-done:
+		if err != nil {
+			log.Fatal("Server error:", err)
+		}
+		// Ensure graceful shutdown of server resources (DB, etc.)
+		if sErr := srv.Shutdown(context.Background()); sErr != nil {
+			log.Printf("Shutdown error: %v", sErr)
+		}
+		log.Println("Server stopped")
 	case sig := <-sigChan:
 		log.Printf("Received signal: %v. Shutting down gracefully...", sig)
-		
+
 		// Create a timeout context for shutdown
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()

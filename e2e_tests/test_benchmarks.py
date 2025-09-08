@@ -78,9 +78,9 @@ def _create_entities(client, entities):
 
 def _prep_http(server_bin: Path, tmp_path: Path):
     env = temp_db_env(tmp_path)
-    port = get_free_port()
+    port_path = tmp_path / "port.txt"
     proc = subprocess.Popen(
-        [str(server_bin), "-http", f"127.0.0.1:{port}"],
+        [str(server_bin), "-http", ":0", "-portfile", str(port_path)],
         cwd=str(REPO_ROOT),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
@@ -88,15 +88,22 @@ def _prep_http(server_bin: Path, tmp_path: Path):
         env=env,
         text=True,
     )
+    # wait for portfile
+    for _ in range(100):
+        if port_path.exists():
+            break
+        import time as _t
+        _t.sleep(0.05)
+    port = int(port_path.read_text())
     wait_port("127.0.0.1", port)
     return proc, port
 
 
 def _prep_http_sse(server_bin: Path, tmp_path: Path):
     env = temp_db_env(tmp_path)
-    port = get_free_port()
+    port_path = tmp_path / "port.txt"
     proc = subprocess.Popen(
-        [str(server_bin), "-http", f"127.0.0.1:{port}", "-sse"],
+        [str(server_bin), "-http", ":0", "-sse", "-portfile", str(port_path)],
         cwd=str(REPO_ROOT),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
@@ -104,6 +111,12 @@ def _prep_http_sse(server_bin: Path, tmp_path: Path):
         env=env,
         text=True,
     )
+    for _ in range(100):
+        if port_path.exists():
+            break
+        import time as _t
+        _t.sleep(0.05)
+    port = int(port_path.read_text())
     wait_port("127.0.0.1", port)
     return proc, port
 

@@ -76,9 +76,9 @@ def client(request, server_bin: Path, tmp_path: Path):
         finally:
             c.close()
     else:
-        port = get_free_port()
+        port_path = tmp_path / "port.txt"
         proc = subprocess.Popen(
-            [str(server_bin), "-http", f"127.0.0.1:{port}"],
+            [str(server_bin), "-http", ":0", "-portfile", str(port_path)],
             cwd=str(REPO_ROOT),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -87,6 +87,12 @@ def client(request, server_bin: Path, tmp_path: Path):
             text=True,
         )
         try:
+            for _ in range(100):
+                if port_path.exists():
+                    break
+                import time as _t
+                _t.sleep(0.05)
+            port = int(port_path.read_text())
             wait_port("127.0.0.1", port)
             c = MCPHTTPStreamableClient("127.0.0.1", port)
             c.initialize(); c.send_initialized()
@@ -185,4 +191,3 @@ def test_open_nodes_skips_missing(client):
     r = client.tools_call("open_nodes", {"names": ["O1", "Missing"]})
     data = _parse_text_json(client, r)
     assert {e["name"] for e in data["entities"]} == {"O1"}
-
