@@ -27,6 +27,15 @@ func jsonText(t *testing.T, res *mcp.CallToolResult) string {
     return tc.Text
 }
 
+// unmarshalJSON unmarshals the first TextContent JSON payload into T and fails the test on error.
+func unmarshalJSON[T any](t *testing.T, res *mcp.CallToolResult) T {
+    t.Helper()
+    var out T
+    err := json.Unmarshal([]byte(jsonText(t, res)), &out)
+    assert.NoError(t, err)
+    return out
+}
+
 func TestServer_CreateEntities_AndReadGraph(t *testing.T) {
     s, _ := newTestServer(t)
 
@@ -37,15 +46,13 @@ func TestServer_CreateEntities_AndReadGraph(t *testing.T) {
     }})
     assert.NoError(t, err)
 
-    var created []database.EntityWithObservations
-    assert.NoError(t, json.Unmarshal([]byte(jsonText(t, res)), &created))
+    created := unmarshalJSON[[]database.EntityWithObservations](t, res)
     assert.Len(t, created, 2)
 
     // read graph
     res, _, err = s.handleReadGraph(context.Background())
     assert.NoError(t, err)
-    var g database.KnowledgeGraph
-    assert.NoError(t, json.Unmarshal([]byte(jsonText(t, res)), &g))
+    g := unmarshalJSON[database.KnowledgeGraph](t, res)
     assert.Len(t, g.Entities, 2)
 }
 
@@ -105,11 +112,7 @@ func TestServer_AddObservations_MixedAndError(t *testing.T) {
         Contents:   []string{"o1", "o2", "o2"},
     }}})
     assert.NoError(t, err)
-    var added []struct {
-        EntityName        string   `json:"entityName"`
-        AddedObservations []string `json:"addedObservations"`
-    }
-    assert.NoError(t, json.Unmarshal([]byte(jsonText(t, res)), &added))
+    added := unmarshalJSON[[]database.ObservationAdditionResult](t, res)
     assert.Len(t, added, 1)
     assert.Equal(t, []string{"o2"}, added[0].AddedObservations)
 
@@ -177,20 +180,19 @@ func TestServer_CreateRelations_Edges(t *testing.T) {
     // self relation allowed
     res, _, err := s.handleCreateRelations(context.Background(), CreateRelationsParams{Relations: []database.RelationDTO{{From: "A", To: "A", RelationType: "self"}}})
     assert.NoError(t, err)
-    var created []database.RelationDTO
-    assert.NoError(t, json.Unmarshal([]byte(jsonText(t, res)), &created))
+    created := unmarshalJSON[[]database.RelationDTO](t, res)
     assert.Len(t, created, 1)
 
     // duplicate no-op
     res, _, err = s.handleCreateRelations(context.Background(), CreateRelationsParams{Relations: []database.RelationDTO{{From: "A", To: "A", RelationType: "self"}}})
     assert.NoError(t, err)
-    assert.NoError(t, json.Unmarshal([]byte(jsonText(t, res)), &created))
+    created = unmarshalJSON[[]database.RelationDTO](t, res)
     assert.Len(t, created, 0)
 
     // missing endpoint no-op
     res, _, err = s.handleCreateRelations(context.Background(), CreateRelationsParams{Relations: []database.RelationDTO{{From: "A", To: "C", RelationType: "rel"}}})
     assert.NoError(t, err)
-    assert.NoError(t, json.Unmarshal([]byte(jsonText(t, res)), &created))
+    created = unmarshalJSON[[]database.RelationDTO](t, res)
     assert.Len(t, created, 0)
 }
 
@@ -266,8 +268,7 @@ func TestServer_DeleteEntities_Cascade(t *testing.T) {
     // read graph
     res, _, err = s.handleReadGraph(context.Background())
     assert.NoError(t, err)
-    var g database.KnowledgeGraph
-    assert.NoError(t, json.Unmarshal([]byte(jsonText(t, res)), &g))
+    g := unmarshalJSON[database.KnowledgeGraph](t, res)
     assert.Len(t, g.Entities, 1)
     assert.Equal(t, "B", g.Entities[0].Name)
     assert.Len(t, g.Relations, 0)
@@ -426,15 +427,14 @@ func TestServer_SearchNodes_Edges(t *testing.T) {
     // case-insensitive search
     res, _, err := s.handleSearchNodes(context.Background(), SearchNodesParams{Query: "apple"})
     assert.NoError(t, err)
-    var g database.KnowledgeGraph
-    assert.NoError(t, json.Unmarshal([]byte(jsonText(t, res)), &g))
+    g := unmarshalJSON[database.KnowledgeGraph](t, res)
     assert.Len(t, g.Entities, 1)
     assert.Equal(t, "Apple", g.Entities[0].Name)
 
     // empty query returns all
     res, _, err = s.handleSearchNodes(context.Background(), SearchNodesParams{Query: ""})
     assert.NoError(t, err)
-    assert.NoError(t, json.Unmarshal([]byte(jsonText(t, res)), &g))
+    g = unmarshalJSON[database.KnowledgeGraph](t, res)
     assert.GreaterOrEqual(t, len(g.Entities), 2)
 }
 
@@ -477,22 +477,21 @@ func TestServer_OpenNodes_Edges(t *testing.T) {
     // open two with no relation between them
     res, _, err := s.handleOpenNodes(context.Background(), OpenNodesParams{Names: []string{"E1", "E3"}})
     assert.NoError(t, err)
-    var g database.KnowledgeGraph
-    assert.NoError(t, json.Unmarshal([]byte(jsonText(t, res)), &g))
+    g := unmarshalJSON[database.KnowledgeGraph](t, res)
     assert.Len(t, g.Entities, 2)
     assert.Len(t, g.Relations, 0)
 
     // duplicates and unknown filtered
     res, _, err = s.handleOpenNodes(context.Background(), OpenNodesParams{Names: []string{"E1", "E1", "unknown"}})
     assert.NoError(t, err)
-    assert.NoError(t, json.Unmarshal([]byte(jsonText(t, res)), &g))
+    g = unmarshalJSON[database.KnowledgeGraph](t, res)
     assert.Len(t, g.Entities, 1)
     assert.Equal(t, "E1", g.Entities[0].Name)
 
     // empty input
     res, _, err = s.handleOpenNodes(context.Background(), OpenNodesParams{Names: nil})
     assert.NoError(t, err)
-    assert.NoError(t, json.Unmarshal([]byte(jsonText(t, res)), &g))
+    g = unmarshalJSON[database.KnowledgeGraph](t, res)
     assert.Len(t, g.Entities, 0)
     assert.Len(t, g.Relations, 0)
 }
