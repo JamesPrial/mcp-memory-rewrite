@@ -328,26 +328,75 @@ The SQLite database uses the following schema:
 - `entities_fts` - FTS5 virtual table for entity search
 - `observations_fts` - FTS5 virtual table for observation search
 
-## Building with Docker
+## Docker Usage
 
-```dockerfile
-FROM golang:1.23-alpine AS builder
-RUN apk add --no-cache gcc musl-dev sqlite-dev
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN go build -o mcp-memory-server ./cmd/mcp-memory-server
+### Using Pre-built Image
 
-FROM alpine:latest
-RUN apk add --no-cache sqlite
-COPY --from=builder /app/mcp-memory-server /usr/local/bin/
-VOLUME ["/data"]
-ENV MEMORY_DB_PATH=/data/memory.db
-ENTRYPOINT ["mcp-memory-server"]
+The Docker image is automatically built and published to GitHub Container Registry:
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/jamesprial/mcp-memory-rewrite:latest
+
+# Run in stdio mode (for MCP clients)
+docker run -i --rm \
+  -v mcp-memory-data:/data \
+  ghcr.io/jamesprial/mcp-memory-rewrite:latest
+
+# Run in HTTP mode on port 8080
+docker run -d \
+  -p 8080:8080 \
+  -v mcp-memory-data:/data \
+  ghcr.io/jamesprial/mcp-memory-rewrite:latest -http :8080
+
+# Run with Server-Sent Events
+docker run -d \
+  -p 8080:8080 \
+  -v mcp-memory-data:/data \
+  ghcr.io/jamesprial/mcp-memory-rewrite:latest -http :8080 -sse
 ```
 
-Build and run:
+### Use with Claude Desktop
+
+Add this to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-v", "mcp-memory-data:/data",
+        "ghcr.io/jamesprial/mcp-memory-rewrite:latest"
+      ]
+    }
+  }
+}
+```
+
+### Docker Compose
+
+```yaml
+version: '3.8'
+
+services:
+  mcp-memory:
+    image: ghcr.io/jamesprial/mcp-memory-rewrite:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - memory-data:/data
+    environment:
+      - LOG_LEVEL=info
+    command: ["-http", ":8080"]
+
+volumes:
+  memory-data:
+```
+
+### Building from Source
+
 ```bash
 docker build -t mcp-memory-server .
 docker run -i -v mcp-memory-data:/data mcp-memory-server
