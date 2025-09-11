@@ -38,11 +38,12 @@ func NewLogger(service string, level slog.Level) *slog.Logger {
 	}
 	
 	// Use JSON handler for production, Text handler for development
+	// Always log to stderr to avoid interfering with stdio protocol
 	var handler slog.Handler
 	if os.Getenv("ENV") == "production" || os.Getenv("LOG_FORMAT") == "json" {
-		handler = slog.NewJSONHandler(os.Stdout, opts)
+		handler = slog.NewJSONHandler(os.Stderr, opts)
 	} else {
-		handler = slog.NewTextHandler(os.Stdout, opts)
+		handler = slog.NewTextHandler(os.Stderr, opts)
 	}
 	
 	return slog.New(handler).With(
