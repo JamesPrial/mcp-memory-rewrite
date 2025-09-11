@@ -4,13 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"time"
 
+	"github.com/jamesprial/mcp-memory-rewrite/internal/logging"
 	"github.com/jamesprial/mcp-memory-rewrite/pkg/database"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type Server struct {
-	db *database.DB
+	db     *database.DB
+	logger *slog.Logger
 }
 
 type CreateEntitiesParams struct {
@@ -55,9 +59,15 @@ type OpenNodesParams struct {
 	Names []string `json:"names" jsonschema:"description:Array of entity names to retrieve"`
 }
 
-// NewServer creates a new MCP memory server
-func NewServer(db *database.DB) *Server {
-	return &Server{db: db}
+// NewServerWithLogger creates a new MCP memory server with a logger
+func NewServerWithLogger(db *database.DB, logger *slog.Logger) *Server {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &Server{
+		db:     db,
+		logger: logger,
+	}
 }
 
 // Shutdown gracefully shuts down the server
@@ -159,10 +169,34 @@ func (s *Server) RegisterTools(mcpServer *mcp.Server) {
 }
 
 func (s *Server) handleCreateEntities(ctx context.Context, params CreateEntitiesParams) (*mcp.CallToolResult, any, error) {
+	logger := logging.LoggerWithContext(ctx, s.logger)
+	start := time.Now()
+
+	logger.Info("handling create_entities request",
+		slog.Int("entity_count", len(params.Entities)),
+	)
+
+	// Validate input parameters
+	if err := ValidateCreateEntitiesParams(params); err != nil {
+		logger.Warn("invalid create_entities parameters",
+			slog.String("error", err.Error()),
+		)
+		return nil, nil, fmt.Errorf("validation error: %w", err)
+	}
+
 	created, err := s.db.CreateEntities(ctx, params.Entities)
 	if err != nil {
+		logger.Error("failed to create entities",
+			slog.String("error", err.Error()),
+			slog.Duration("duration", time.Since(start)),
+		)
 		return nil, nil, fmt.Errorf("failed to create entities: %w", err)
 	}
+
+	logger.Info("entities created successfully",
+		slog.Int("created", len(created)),
+		slog.Duration("duration", time.Since(start)),
+	)
 
 	jsonData, _ := json.MarshalIndent(created, "", "  ")
 	return &mcp.CallToolResult{
@@ -173,6 +207,16 @@ func (s *Server) handleCreateEntities(ctx context.Context, params CreateEntities
 }
 
 func (s *Server) handleCreateRelations(ctx context.Context, params CreateRelationsParams) (*mcp.CallToolResult, any, error) {
+	logger := logging.LoggerWithContext(ctx, s.logger)
+
+	// Validate input parameters
+	if err := ValidateCreateRelationsParams(params); err != nil {
+		logger.Warn("invalid create_relations parameters",
+			slog.String("error", err.Error()),
+		)
+		return nil, nil, fmt.Errorf("validation error: %w", err)
+	}
+
 	created, err := s.db.CreateRelations(ctx, params.Relations)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create relations: %w", err)
@@ -187,16 +231,26 @@ func (s *Server) handleCreateRelations(ctx context.Context, params CreateRelatio
 }
 
 func (s *Server) handleAddObservations(ctx context.Context, params AddObservationsParams) (*mcp.CallToolResult, any, error) {
-    // Convert to the format expected by the database (named type)
-    dbParams := make([]database.ObservationAdditionInput, len(params.Observations))
-    for i, obs := range params.Observations {
-        dbParams[i] = database.ObservationAdditionInput{EntityName: obs.EntityName, Contents: obs.Contents}
-    }
+	logger := logging.LoggerWithContext(ctx, s.logger)
 
-    results, err := s.db.AddObservations(ctx, dbParams)
-    if err != nil {
-        return nil, nil, fmt.Errorf("failed to add observations: %w", err)
-    }
+	// Validate input parameters
+	if err := ValidateAddObservationsParams(params); err != nil {
+		logger.Warn("invalid add_observations parameters",
+			slog.String("error", err.Error()),
+		)
+		return nil, nil, fmt.Errorf("validation error: %w", err)
+	}
+
+	// Convert to the format expected by the database (named type)
+	dbParams := make([]database.ObservationAdditionInput, len(params.Observations))
+	for i, obs := range params.Observations {
+		dbParams[i] = database.ObservationAdditionInput{EntityName: obs.EntityName, Contents: obs.Contents}
+	}
+
+	results, err := s.db.AddObservations(ctx, dbParams)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to add observations: %w", err)
+	}
 
 	jsonData, _ := json.MarshalIndent(results, "", "  ")
 	return &mcp.CallToolResult{
@@ -219,15 +273,15 @@ func (s *Server) handleDeleteEntities(ctx context.Context, params DeleteEntities
 }
 
 func (s *Server) handleDeleteObservations(ctx context.Context, params DeleteObservationsParams) (*mcp.CallToolResult, any, error) {
-    // Convert to the format expected by the database (named type)
-    dbParams := make([]database.ObservationDeletionInput, len(params.Deletions))
-    for i, del := range params.Deletions {
-        dbParams[i] = database.ObservationDeletionInput{EntityName: del.EntityName, Observations: del.Observations}
-    }
+	// Convert to the format expected by the database (named type)
+	dbParams := make([]database.ObservationDeletionInput, len(params.Deletions))
+	for i, del := range params.Deletions {
+		dbParams[i] = database.ObservationDeletionInput{EntityName: del.EntityName, Observations: del.Observations}
+	}
 
-    if err := s.db.DeleteObservations(ctx, dbParams); err != nil {
-        return nil, nil, fmt.Errorf("failed to delete observations: %w", err)
-    }
+	if err := s.db.DeleteObservations(ctx, dbParams); err != nil {
+		return nil, nil, fmt.Errorf("failed to delete observations: %w", err)
+	}
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -263,10 +317,54 @@ func (s *Server) handleReadGraph(ctx context.Context) (*mcp.CallToolResult, any,
 }
 
 func (s *Server) handleSearchNodes(ctx context.Context, params SearchNodesParams) (*mcp.CallToolResult, any, error) {
-	graph, err := s.db.SearchNodes(ctx, params.Query)
+	logger := logging.LoggerWithContext(ctx, s.logger)
+	start := time.Now()
+
+	// Use Debug level for high-frequency operations like search
+	logger.Debug("handling search_nodes request",
+		slog.String("query", params.Query),
+	)
+
+	// Validate input parameters
+	if err := ValidateSearchNodesParams(params); err != nil {
+		logger.Warn("invalid search_nodes parameters",
+			slog.String("error", err.Error()),
+		)
+		return nil, nil, fmt.Errorf("validation error: %w", err)
+	}
+
+	// Try FTS5 search if available, otherwise use LIKE search
+	var graph *database.KnowledgeGraph
+	var err error
+
+	if s.db.IsFTSEnabled() {
+		graph, err = s.db.SearchNodesFTS(ctx, params.Query)
+		if err != nil {
+			logger.Debug("FTS5 search failed, falling back to LIKE search",
+				slog.String("error", err.Error()),
+			)
+			// Fallback to regular LIKE-based search
+			graph, err = s.db.SearchNodes(ctx, params.Query)
+		}
+	} else {
+		// FTS not available, use LIKE search
+		graph, err = s.db.SearchNodes(ctx, params.Query)
+	}
+
 	if err != nil {
+		logger.Error("failed to search nodes",
+			slog.String("error", err.Error()),
+			slog.Duration("duration", time.Since(start)),
+		)
 		return nil, nil, fmt.Errorf("failed to search nodes: %w", err)
 	}
+
+	// Only log at debug level for high-frequency operations
+	logger.Debug("search completed successfully",
+		slog.Int("entities_found", len(graph.Entities)),
+		slog.Int("relations_found", len(graph.Relations)),
+		slog.Duration("duration", time.Since(start)),
+	)
 
 	jsonData, _ := json.MarshalIndent(graph, "", "  ")
 	return &mcp.CallToolResult{
@@ -277,6 +375,16 @@ func (s *Server) handleSearchNodes(ctx context.Context, params SearchNodesParams
 }
 
 func (s *Server) handleOpenNodes(ctx context.Context, params OpenNodesParams) (*mcp.CallToolResult, any, error) {
+	logger := logging.LoggerWithContext(ctx, s.logger)
+
+	// Validate input parameters
+	if err := ValidateOpenNodesParams(params); err != nil {
+		logger.Warn("invalid open_nodes parameters",
+			slog.String("error", err.Error()),
+		)
+		return nil, nil, fmt.Errorf("validation error: %w", err)
+	}
+
 	graph, err := s.db.OpenNodes(ctx, params.Names)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to open nodes: %w", err)
