@@ -320,7 +320,8 @@ func (s *Server) handleSearchNodes(ctx context.Context, params SearchNodesParams
 	logger := logging.LoggerWithContext(ctx, s.logger)
 	start := time.Now()
 
-	logger.Info("handling search_nodes request",
+	// Use Debug level for high-frequency operations like search
+	logger.Debug("handling search_nodes request",
 		slog.String("query", params.Query),
 	)
 
@@ -358,7 +359,8 @@ func (s *Server) handleSearchNodes(ctx context.Context, params SearchNodesParams
 		return nil, nil, fmt.Errorf("failed to search nodes: %w", err)
 	}
 
-	logger.Info("search completed successfully",
+	// Only log at debug level for high-frequency operations
+	logger.Debug("search completed successfully",
 		slog.Int("entities_found", len(graph.Entities)),
 		slog.Int("relations_found", len(graph.Relations)),
 		slog.Duration("duration", time.Since(start)),
