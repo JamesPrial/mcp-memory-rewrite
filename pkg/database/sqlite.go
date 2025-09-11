@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,6 +23,14 @@ type DB struct {
 func NewDBWithLogger(dbPath string, logger *slog.Logger) (*DB, error) {
 	if logger == nil {
 		logger = slog.Default()
+	}
+
+	// Ensure the parent directory exists
+	if dbPath != ":memory:" {
+		dir := filepath.Dir(dbPath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create database directory: %w", err)
+		}
 	}
 
 	logger.Info("opening database connection",

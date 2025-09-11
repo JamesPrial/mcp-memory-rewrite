@@ -33,11 +33,16 @@ RUN addgroup -g 1000 mcp && \
 COPY --from=builder /app/mcp-memory-server /usr/local/bin/
 RUN chmod +x /usr/local/bin/mcp-memory-server
 
-# Create data directory
-RUN mkdir -p /data && chown -R mcp:mcp /data
+# Create data directory with proper permissions
+RUN mkdir -p /data && \
+    chown -R mcp:mcp /data && \
+    chmod 755 /data
 
 # Switch to non-root user
 USER mcp
+
+# Ensure /data is writable
+WORKDIR /data
 
 # Set volume for persistent storage
 VOLUME ["/data"]

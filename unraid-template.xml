@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>mcp-memory-server</Name>
+  <Repository>ghcr.io/jamesprial/mcp-memory-rewrite:latest</Repository>
+  <Registry>https://ghcr.io</Registry>
+  <Network>bridge</Network>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/jamesprial/mcp-memory-rewrite/issues</Support>
+  <Project>https://github.com/jamesprial/mcp-memory-rewrite</Project>
+  <Overview>MCP Memory Server - A high-performance knowledge graph memory server using SQLite with FTS5 for MCP (Model Context Protocol) clients like Claude Desktop.</Overview>
+  <Category>AI: Productivity:</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/jamesprial/mcp-memory-rewrite/main/unraid-template.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/jamesprial/mcp-memory-rewrite/main/icon.png</Icon>
+  <ExtraParams>-http :8080</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled></DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Description>
+    Knowledge Graph Memory Server for MCP clients.
+    
+    Modes:
+    - Default (stdio): For MCP clients like Claude Desktop
+    - HTTP: Add "-http :8080" to Extra Parameters
+    - HTTP with SSE: Add "-http :8080 -sse" to Extra Parameters
+    
+    The server provides persistent memory storage for AI assistants using SQLite with full-text search.
+  </Description>
+  <Networking>
+    <Mode>bridge</Mode>
+    <Publish>
+      <Port>
+        <HostPort>8080</HostPort>
+        <ContainerPort>8080</ContainerPort>
+        <Protocol>tcp</Protocol>
+      </Port>
+    </Publish>
+  </Networking>
+  <Data>
+    <Volume>
+      <HostDir>/mnt/user/appdata/mcp-memory</HostDir>
+      <ContainerDir>/data</ContainerDir>
+      <Mode>rw</Mode>
+    </Volume>
+  </Data>
+  <Environment>
+    <Variable>
+      <Value>info</Value>
+      <Name>LOG_LEVEL</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>/data/memory.db</Value>
+      <Name>MEMORY_DB_PATH</Name>
+      <Mode/>
+    </Variable>
+  </Environment>
+  <Labels/>
+  <Config Name="Web Port" Target="8080" Default="8080" Mode="tcp" Description="Port for HTTP API (only used in HTTP mode)" Type="Port" Display="always" Required="false" Mask="false">8080</Config>
+  <Config Name="Data Directory" Target="/data" Default="/mnt/user/appdata/mcp-memory" Mode="rw" Description="Directory for SQLite database storage" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/mcp-memory</Config>
+  <Config Name="Log Level" Target="LOG_LEVEL" Default="info" Mode="" Description="Logging level: debug, info, warn, error" Type="Variable" Display="always" Required="false" Mask="false">info</Config>
+  <Config Name="Extra Parameters" Target="" Default="-http :8080" Mode="" Description="Add '-http :8080' for HTTP mode or '-http :8080 -sse' for SSE mode" Type="Variable" Display="always" Required="false" Mask="false">-http :8080</Config>
+</Container>
