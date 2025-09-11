@@ -2,6 +2,8 @@ package database
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,7 +11,9 @@ import (
 
 func setupTestDB(t *testing.T) *DB {
 	// Use a shared in-memory SQLite database for testing to ensure the schema is not lost between connections.
-	db, err := NewDB("file::memory:?cache=shared")
+	// Use a silent logger for tests
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	db, err := NewDBWithLogger("file::memory:?cache=shared", logger)
 	assert.NoError(t, err)
 	assert.NotNil(t, db)
 	return db

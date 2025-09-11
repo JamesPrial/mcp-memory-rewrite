@@ -5,6 +5,8 @@
 *.so
 *.dylib
 
+mcp-memory-server
+
 .e2e_bin
 
 # Test binary, built with `go test -c`

@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jamesprial/mcp-memory-rewrite/internal/config"
+	"github.com/jamesprial/mcp-memory-rewrite/internal/logging"
 	"github.com/jamesprial/mcp-memory-rewrite/pkg/database"
 	"github.com/jamesprial/mcp-memory-rewrite/pkg/server"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -27,20 +28,44 @@ var (
 func main() {
 	flag.Parse()
 
+	// Setup structured logging
+	logLevel := logging.GetLogLevel()
+	logger := logging.NewLogger("mcp-memory-server", logLevel)
+	slog.SetDefault(logger)
+
+	// Log startup information
+	logger.Info("starting MCP memory server",
+		slog.String("version", "0.1.0"),
+		slog.String("log_level", logLevel.String()),
+	)
+
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal("Failed to load configuration:", err)
+		logger.Error("failed to load configuration",
+			slog.String("error", err.Error()),
+		)
+		os.Exit(1)
 	}
 
-	// Initialize database
-	db, err := database.NewDB(cfg.DBPath)
+	logger.Info("configuration loaded",
+		slog.String("db_path", cfg.DBPath),
+	)
+
+	// Initialize database with logging
+	dbLogger := logger.With(slog.String("component", "database"))
+	db, err := database.NewDBWithLogger(cfg.DBPath, dbLogger)
 	if err != nil {
-		log.Fatal("Failed to initialize database:", err)
+		logger.Error("failed to initialize database",
+			slog.String("error", err.Error()),
+			slog.String("path", cfg.DBPath),
+		)
+		os.Exit(1)
 	}
 
-	// Create the server
-	srv := server.NewServer(db)
+	// Create the server with logger
+	srvLogger := logger.With(slog.String("component", "server"))
+	srv := server.NewServerWithLogger(db, srvLogger)
 
 	// Create MCP server
 	mcpServer := mcp.NewServer(
@@ -70,20 +95,25 @@ func main() {
 		// HTTP mode
 		go func() {
 			var handler http.Handler
+			mode := "HTTP"
 
 			if *sseMode {
-				log.Printf("MCP Memory Server starting in SSE mode on %s...", *httpAddr)
+				mode = "SSE"
 				// SSE handler expects a function that returns the server
 				handler = mcp.NewSSEHandler(func(*http.Request) *mcp.Server {
 					return mcpServer
 				})
 			} else {
-				log.Printf("MCP Memory Server starting in HTTP mode on %s...", *httpAddr)
 				// Streamable HTTP handler for standard HTTP
 				handler = mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 					return mcpServer
 				}, nil)
 			}
+
+			logger.Info("starting HTTP server",
+				slog.String("mode", mode),
+				slog.String("address", *httpAddr),
+			)
 
 			httpServer := &http.Server{Handler: handler}
 
@@ -92,8 +122,11 @@ func main() {
 				<-ctx.Done()
 				shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
+				logger.Info("shutting down HTTP server")
 				if err := httpServer.Shutdown(shutdownCtx); err != nil {
-					log.Printf("HTTP server shutdown error: %v", err)
+					logger.Error("HTTP server shutdown error",
+						slog.String("error", err.Error()),
+					)
 				}
 			}()
 
@@ -107,7 +140,15 @@ func main() {
 				addr := ln.Addr().(*net.TCPAddr)
 				// Best-effort write
 				if err := os.WriteFile(*portFile, []byte(fmt.Sprintf("%d", addr.Port)), 0644); err != nil {
-					log.Printf("failed writing portfile: %v", err)
+					logger.Warn("failed writing portfile",
+						slog.String("error", err.Error()),
+						slog.String("file", *portFile),
+					)
+				} else {
+					logger.Info("wrote port to file",
+						slog.Int("port", addr.Port),
+						slog.String("file", *portFile),
+					)
 				}
 			}
 			if err := httpServer.Serve(ln); err != nil && err != http.ErrServerClosed {
@@ -119,7 +160,7 @@ func main() {
 	} else {
 		// Stdio mode (default)
 		go func() {
-			log.Println("MCP Memory Server starting in stdio mode...")
+			logger.Info("starting in stdio mode")
 			if err := mcpServer.Run(ctx, &mcp.StdioTransport{}); err != nil {
 				done <- err
 			} else {
@@ -132,15 +173,22 @@ func main() {
 	select {
 	case err := <-done:
 		if err != nil {
-			log.Fatal("Server error:", err)
+			logger.Error("server error",
+				slog.String("error", err.Error()),
+			)
+			os.Exit(1)
 		}
 		// Ensure graceful shutdown of server resources (DB, etc.)
 		if sErr := srv.Shutdown(context.Background()); sErr != nil {
-			log.Printf("Shutdown error: %v", sErr)
+			logger.Error("shutdown error",
+				slog.String("error", sErr.Error()),
+			)
 		}
-		log.Println("Server stopped")
+		logger.Info("server stopped")
 	case sig := <-sigChan:
-		log.Printf("Received signal: %v. Shutting down gracefully...", sig)
+		logger.Info("received signal, shutting down gracefully",
+			slog.String("signal", sig.String()),
+		)
 
 		// Create a timeout context for shutdown
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -151,15 +199,17 @@ func main() {
 
 		// Shutdown the application server
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			log.Printf("Error during shutdown: %v", err)
+			logger.Error("error during shutdown",
+				slog.String("error", err.Error()),
+			)
 		}
 
 		// Wait for server to finish or timeout
 		select {
 		case <-done:
-			log.Println("Graceful shutdown completed")
+			logger.Info("graceful shutdown completed")
 		case <-shutdownCtx.Done():
-			log.Println("Shutdown timeout exceeded")
+			logger.Warn("shutdown timeout exceeded")
 		}
 	}
 }
