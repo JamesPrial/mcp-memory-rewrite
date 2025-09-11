@@ -66,7 +66,7 @@ Example:
 ## Installation
 
 ### Prerequisites
-- Go 1.21 or later
+- Go 1.23 or later
 - SQLite3 (included with most systems)
 
 ### Building from Source
@@ -83,11 +83,40 @@ go build -o mcp-memory-server ./cmd/mcp-memory-server
 go install ./cmd/mcp-memory-server
 ```
 
+### Running the Server
+
+```bash
+# Run in stdio mode (default)
+./mcp-memory-server
+
+# Run in HTTP mode on port 8080
+./mcp-memory-server -http :8080
+
+# Run in HTTP mode with Server-Sent Events
+./mcp-memory-server -http :8080 -sse
+
+# Run with custom database path
+MEMORY_DB_PATH=/path/to/db.sqlite ./mcp-memory-server
+
+# Run with debug logging
+LOG_LEVEL=debug ./mcp-memory-server
+```
+
 ## Configuration
+
+### Command Line Flags
+
+- `-http <address>`: Run in HTTP mode on specified address (e.g., `:8080`)
+- `-sse`: Use Server-Sent Events for HTTP mode (requires `-http`)
+- `-portfile <path>`: Write the actual bound TCP port to a file (useful for testing)
 
 ### Environment Variables
 
 - `MEMORY_DB_PATH`: Path to the SQLite database file (default: `~/.mcp-memory/memory.db`)
+- `LOG_LEVEL`: Logging level - `debug`, `info`, `warn`, `error` (default: `info`)
+- `LOG_FORMAT`: Log output format - `json` or `text` (default: `text`, uses `json` when `ENV=production`)
+- `DEBUG`: Set to `true` for debug logging (alternative to `LOG_LEVEL=debug`)
+- `ENV`: Environment mode - Set to `production` for JSON logging (default: development)
 
 ## Python Test Dependencies
 
@@ -302,7 +331,7 @@ The SQLite database uses the following schema:
 ## Building with Docker
 
 ```dockerfile
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 RUN apk add --no-cache gcc musl-dev sqlite-dev
 WORKDIR /app
 COPY go.mod go.sum ./
