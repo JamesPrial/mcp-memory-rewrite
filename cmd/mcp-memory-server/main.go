@@ -35,7 +35,7 @@ func main() {
 
 	// Log startup information
 	logger.Info("starting MCP memory server",
-		slog.String("version", "0.1.0"),
+		slog.String("version", "1.0.0"),
 		slog.String("log_level", logLevel.String()),
 	)
 
@@ -71,7 +71,7 @@ func main() {
 	mcpServer := mcp.NewServer(
 		&mcp.Implementation{
 			Name:    "mcp-memory-server",
-			Version: "0.1.0",
+			Version: "1.0.0",
 		},
 		nil,
 	)

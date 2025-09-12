@@ -61,7 +61,7 @@ class MCPStdioClient:
             # keep looping until matching id arrives
         raise TimeoutError(f"No response for id {req_id} within {timeout}s")
 
-    def initialize(self, client_name: str = "e2e-tests", version: str = "0.0.1",
+    def initialize(self, client_name: str = "e2e-tests", version: str = "1.0.0",
                    protocol_version: str = "2025-06-18") -> JsonMsg:
         with self._lock:
             rid = self._next_id

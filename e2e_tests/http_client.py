@@ -126,7 +126,7 @@ class MCPHTTPStreamableClient:
                 resp.close()
                 conn.close()
 
-    def initialize(self, client_name: str = "e2e-tests", version: str = "0.0.1") -> Json:
+    def initialize(self, client_name: str = "e2e-tests", version: str = "1.0.0") -> Json:
         rid = self._next_id
         self._next_id += 1
         req = {
