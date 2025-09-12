@@ -145,18 +145,18 @@ func (db *DB) migrate() error {
 	}
 
 	// Try to create FTS5 tables
+	// Use simpler FTS5 tables without external content
 	ftsStatements := []string{
 		`CREATE VIRTUAL TABLE IF NOT EXISTS entities_fts USING fts5(
+			entity_id UNINDEXED,
 			name, 
-			entity_type, 
-			content='entities', 
-			content_rowid='id',
+			entity_type,
 			tokenize='porter unicode61'
 		);`,
 		`CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(
-			content, 
-			content='observations', 
-			content_rowid='id',
+			observation_id UNINDEXED,
+			entity_id UNINDEXED,
+			content,
 			tokenize='porter unicode61'
 		);`,
 	}
@@ -180,30 +180,30 @@ func (db *DB) migrate() error {
 		triggerStatements := []string{
 			// Entity triggers
 			`CREATE TRIGGER IF NOT EXISTS entities_ai AFTER INSERT ON entities BEGIN
-				INSERT INTO entities_fts(rowid, name, entity_type) 
+				INSERT INTO entities_fts(entity_id, name, entity_type) 
 				VALUES (new.id, new.name, new.entity_type);
 			END;`,
 			`CREATE TRIGGER IF NOT EXISTS entities_ad AFTER DELETE ON entities BEGIN
-				DELETE FROM entities_fts WHERE rowid = old.id;
+				DELETE FROM entities_fts WHERE entity_id = old.id;
 			END;`,
 			`CREATE TRIGGER IF NOT EXISTS entities_au AFTER UPDATE ON entities BEGIN
-				DELETE FROM entities_fts WHERE rowid = old.id;
-				INSERT INTO entities_fts(rowid, name, entity_type) 
+				DELETE FROM entities_fts WHERE entity_id = old.id;
+				INSERT INTO entities_fts(entity_id, name, entity_type) 
 				VALUES (new.id, new.name, new.entity_type);
 			END;`,
 
 			// Observation triggers
 			`CREATE TRIGGER IF NOT EXISTS observations_ai AFTER INSERT ON observations BEGIN
-				INSERT INTO observations_fts(rowid, content) 
-				VALUES (new.id, new.content);
+				INSERT INTO observations_fts(observation_id, entity_id, content) 
+				VALUES (new.id, new.entity_id, new.content);
 			END;`,
 			`CREATE TRIGGER IF NOT EXISTS observations_ad AFTER DELETE ON observations BEGIN
-				DELETE FROM observations_fts WHERE rowid = old.id;
+				DELETE FROM observations_fts WHERE observation_id = old.id;
 			END;`,
 			`CREATE TRIGGER IF NOT EXISTS observations_au AFTER UPDATE ON observations BEGIN
-				DELETE FROM observations_fts WHERE rowid = old.id;
-				INSERT INTO observations_fts(rowid, content) 
-				VALUES (new.id, new.content);
+				DELETE FROM observations_fts WHERE observation_id = old.id;
+				INSERT INTO observations_fts(observation_id, entity_id, content) 
+				VALUES (new.id, new.entity_id, new.content);
 			END;`,
 		}
 

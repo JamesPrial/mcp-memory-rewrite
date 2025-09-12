@@ -21,21 +21,14 @@ func (db *DB) SearchNodesFTS(ctx context.Context, query string) (*KnowledgeGraph
 	rows, err := db.conn.QueryContext(ctx, `
 		WITH matched_entities AS (
 			-- Match entities by name or type
-			SELECT DISTINCT e.id
-			FROM entities e
-			WHERE e.id IN (
-				SELECT rowid FROM entities_fts 
-				WHERE entities_fts MATCH ?
-			)
+			SELECT DISTINCT entity_id as id
+			FROM entities_fts 
+			WHERE entities_fts MATCH ?
 			UNION
 			-- Match entities by their observations
-			SELECT DISTINCT e.id
-			FROM entities e
-			JOIN observations o ON e.id = o.entity_id
-			WHERE o.id IN (
-				SELECT rowid FROM observations_fts 
-				WHERE observations_fts MATCH ?
-			)
+			SELECT DISTINCT entity_id as id
+			FROM observations_fts 
+			WHERE observations_fts MATCH ?
 		)
 		SELECT 
 			e.id,

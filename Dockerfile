@@ -13,7 +13,8 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application - go-sqlite3 includes FTS5 by default
+# Build with bundled SQLite that includes FTS5
+# go-sqlite3 v1.14.22 includes FTS5 by default
 RUN CGO_ENABLED=1 \
     GOOS=linux \
     go build -a \
@@ -23,11 +24,10 @@ RUN CGO_ENABLED=1 \
 FROM debian:bookworm-slim
 
 # Install runtime dependencies
-# Debian's SQLite3 package includes FTS5 support by default
+# Only need ca-certificates since SQLite is statically linked
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ca-certificates \
-    sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
