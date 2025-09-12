@@ -52,7 +52,7 @@ type DeleteRelationsParams struct {
 }
 
 type SearchNodesParams struct {
-	Query string `json:"query" jsonschema:"description:Search query to match against entity names types and observations"`
+	Query string `json:"query" jsonschema:"description:Search query. Examples: 'word1 word2' (finds any), '\"exact phrase\"' (phrase match), 'word1 AND word2' (requires both), '+must -not' (include/exclude)"`
 }
 
 type OpenNodesParams struct {
@@ -150,7 +150,7 @@ func (s *Server) RegisterTools(mcpServer *mcp.Server) {
 	mcp.AddTool(mcpServer,
 		&mcp.Tool{
 			Name:        "search_nodes",
-			Description: "Search for nodes in the knowledge graph based on a query",
+			Description: "Search for nodes in the knowledge graph. Default: OR logic (matches any word). Syntax: 'word1 word2' (OR), '\"exact phrase\"' (phrase), 'word1 AND word2' (all words), '+required -excluded' (must have/must not have)",
 		},
 		func(ctx context.Context, req *mcp.CallToolRequest, params SearchNodesParams) (*mcp.CallToolResult, any, error) {
 			return s.handleSearchNodes(ctx, params)

@@ -242,17 +242,53 @@ func (db *DB) SearchNodesRanked(ctx context.Context, query string) (*KnowledgeGr
 
 // escapeFTS5 escapes special characters in FTS5 queries
 func escapeFTS5(query string) string {
-	// FTS5 special characters that need escaping
-	specialChars := []string{"\"", "*", "-", "+", "OR", "AND", "NOT"}
+	// Trim whitespace
+	query = strings.TrimSpace(query)
 	
-	escaped := query
-	for _, char := range specialChars {
-		escaped = strings.ReplaceAll(escaped, char, "\""+char+"\"")
+	// Check if user wants phrase search (wrapped in quotes)
+	if strings.HasPrefix(query, "\"") && strings.HasSuffix(query, "\"") {
+		// User explicitly wants phrase search, keep the quotes
+		return query
 	}
 	
-	// Wrap the entire query in quotes for phrase matching
-	// This ensures we search for the exact terms
-	return "\"" + escaped + "\""
+	// Split query into words and escape each
+	words := strings.Fields(query)
+	escapedWords := make([]string, 0, len(words))
+	
+	for _, word := range words {
+		// Skip empty words
+		if word == "" {
+			continue
+		}
+		
+		// Check for special operators (don't escape these)
+		if word == "OR" || word == "AND" || word == "NOT" {
+			escapedWords = append(escapedWords, word)
+			continue
+		}
+		
+		// Check for prefixed operators (+required, -excluded)
+		if strings.HasPrefix(word, "+") || strings.HasPrefix(word, "-") {
+			// Keep the operator, escape the word part if needed
+			op := word[0:1]
+			term := word[1:]
+			if term != "" {
+				escapedWords = append(escapedWords, op+"\""+term+"\"")
+			}
+			continue
+		}
+		
+		// Regular word - wrap in quotes to handle special chars
+		escapedWords = append(escapedWords, "\""+word+"\"")
+	}
+	
+	// Join with OR for default "any word" matching
+	if len(escapedWords) == 0 {
+		return "\"\""
+	}
+	
+	// Join words with OR operator for inclusive search
+	return strings.Join(escapedWords, " OR ")
 }
 
 // RebuildFTSIndex rebuilds the FTS index (useful after bulk imports)
