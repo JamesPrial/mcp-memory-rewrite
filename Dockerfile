@@ -1,8 +1,5 @@
-# Build stage
-FROM golang:1.23-alpine AS builder
-
-# Install build dependencies
-RUN apk add --no-cache gcc musl-dev sqlite-dev
+# Build stage - Use Debian for compatibility with runtime
+FROM golang:1.23-bookworm AS builder
 
 # Set working directory
 WORKDIR /app
