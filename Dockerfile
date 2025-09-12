@@ -13,11 +13,12 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build with bundled SQLite that includes FTS5
-# go-sqlite3 v1.14.22 includes FTS5 by default
+# Build with FTS5 support enabled
+# The sqlite_fts5 build tag is required to enable FTS5
 RUN CGO_ENABLED=1 \
     GOOS=linux \
     go build -a \
+    -tags "sqlite_fts5" \
     -o mcp-memory-server ./cmd/mcp-memory-server
 
 # Runtime stage - Use Debian for better SQLite support

@@ -3,7 +3,7 @@ module github.com/jamesprial/mcp-memory-rewrite
 go 1.23.0
 
 require (
-	github.com/mattn/go-sqlite3 v1.14.22
+	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/modelcontextprotocol/go-sdk v0.3.1
 	github.com/stretchr/testify v1.9.0
 )
