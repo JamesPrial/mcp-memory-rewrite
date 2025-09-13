@@ -30,7 +30,10 @@ class MCPBenchmarkClient:
             payload["id"] = self._request_id
 
         data = json.dumps(payload).encode("utf-8")
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        }
         req = urllib.request.Request(
             self.url, data=data, headers=headers, method="POST"
         )
