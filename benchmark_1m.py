@@ -46,7 +46,19 @@ class MCPBenchmarkClient:
                     )
                 if is_notification:
                     return None
-                response_data = json.loads(response.read().decode("utf-8"))
+
+                # The streamable endpoint uses text/event-stream format.
+                # We need to parse the "data: <json>\n\n" wrapper.
+                raw_body = response.read().decode("utf-8").strip()
+                if not raw_body:
+                    raise RuntimeError("Server returned an empty response body, which can happen with a client/server protocol mismatch.")
+
+                if not raw_body.startswith("data:"):
+                    raise ValueError(f"Unexpected response format, expected 'data:': {raw_body}")
+
+                json_part = raw_body.split("data:", 1)[1].strip()
+                response_data = json.loads(json_part)
+
                 if "error" in response_data:
                     raise RuntimeError(f"RPC Error: {response_data['error']}")
                 return response_data.get("result")
