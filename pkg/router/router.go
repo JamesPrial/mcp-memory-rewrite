@@ -63,7 +63,7 @@ func NewRouter(mcpServer *mcp.Server, logger *slog.Logger, cfg *RouterConfig) ht
 	}
 
 	// Health endpoints
-	mux.HandleFunc(join(cfg.BasePath, HEALTH), func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle(join(cfg.BasePath, HEALTH), requestLogger(logger, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -71,8 +71,8 @@ func NewRouter(mcpServer *mcp.Server, logger *slog.Logger, cfg *RouterConfig) ht
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
-	})
-	mux.HandleFunc(join(cfg.BasePath, READY), func(w http.ResponseWriter, r *http.Request) {
+	})))
+	mux.Handle(join(cfg.BasePath, READY), requestLogger(logger, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -80,10 +80,17 @@ func NewRouter(mcpServer *mcp.Server, logger *slog.Logger, cfg *RouterConfig) ht
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
-	})
+	})))
 
 	// Root info endpoint: advertises available endpoints.
-	mux.HandleFunc(join(cfg.BasePath, "/"), func(w http.ResponseWriter, r *http.Request) {
+	// Only respond to exact match of the root path, not as a catch-all
+	rootPath := join(cfg.BasePath, "/")
+	mux.Handle(rootPath, requestLogger(logger, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Only handle exact path match
+		if r.URL.Path != rootPath {
+			http.NotFound(w, r)
+			return
+		}
 		if r.Method != http.MethodGet {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -118,7 +125,7 @@ func NewRouter(mcpServer *mcp.Server, logger *slog.Logger, cfg *RouterConfig) ht
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(info)
-	})
+	})))
 
 	// MCP handlers (mounted under /mcp/...)
 	if cfg.EnableSSE {
@@ -135,8 +142,8 @@ func NewRouter(mcpServer *mcp.Server, logger *slog.Logger, cfg *RouterConfig) ht
 		mux.Handle(join(cfg.BasePath, HTTP), requestLogger(logger, streamHandler))
 	}
 
-	// Wrap everything with a simple request logger.
-	return requestLogger(logger, mux)
+	// Return the mux directly - logging is already applied to individual handlers
+	return mux
 }
 
 // requestLogger is a lightweight HTTP middleware that logs request/response details.
