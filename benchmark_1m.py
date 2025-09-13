@@ -20,6 +20,7 @@ class MCPBenchmarkClient:
     def __init__(self, host, port):
         self.url = f"http://{host}:{port}/mcp/stream"
         self._request_id = 0
+        self.session_id = None
 
     def _send_request(self, method, params, is_notification=False):
         self._request_id += 1
@@ -34,36 +35,65 @@ class MCPBenchmarkClient:
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
         }
+        # Include session ID if we have one
+        if self.session_id:
+            headers["Mcp-Session-Id"] = self.session_id
         req = urllib.request.Request(
             self.url, data=data, headers=headers, method="POST"
         )
 
         try:
             with urllib.request.urlopen(req) as response:
+                # Notifications can return 202 (Accepted) or 200 (OK)
+                if is_notification:
+                    if response.status not in [200, 202]:
+                        raise RuntimeError(
+                            f"Notification failed: {response.status} {response.read().decode()}"
+                        )
+                    return None
+
                 if response.status != 200:
                     raise RuntimeError(
                         f"Request failed: {response.status} {response.read().decode()}"
                     )
-                if is_notification:
-                    return None
 
-                # The streamable endpoint uses text/event-stream format.
-                # We need to parse the "data: <json>\n\n" wrapper.
+                # Check for session ID in headers (set during initialization)
+                if method == "initialize":
+                    session_id = response.headers.get('Mcp-Session-Id')
+                    if session_id:
+                        self.session_id = session_id
+                        print(f"Got session ID: {session_id}")
+
+                # Check Content-Type to determine response format
+                content_type = response.headers.get('Content-Type', '')
                 raw_body = response.read().decode("utf-8").strip()
+
                 if not raw_body:
-                    raise RuntimeError("Server returned an empty response body, which can happen with a client/server protocol mismatch.")
+                    raise RuntimeError("Server returned an empty response body")
 
-                json_part = None
-                for line in raw_body.splitlines():
-                    if line.startswith("data:"):
-                        # Extract the content after "data:"
-                        json_part = line.split("data:", 1)[1].strip()
-                        break
-                
-                if json_part is None:
-                    raise ValueError(f"Could not find 'data:' line in server response: {raw_body}")
+                # Handle both streamable HTTP response formats
+                if 'text/event-stream' in content_type:
+                    # SSE format: parse "data: <json>\n\n" format
+                    json_part = None
+                    for line in raw_body.splitlines():
+                        if line.startswith("data:"):
+                            # Extract the JSON after "data:"
+                            json_part = line.split("data:", 1)[1].strip()
+                            break
 
-                response_data = json.loads(json_part)
+                    if json_part is None:
+                        raise ValueError(f"Could not find 'data:' line in SSE response: {raw_body}")
+
+                    response_data = json.loads(json_part)
+                elif 'application/json' in content_type:
+                    # Regular JSON response
+                    response_data = json.loads(raw_body)
+                else:
+                    # Try parsing as JSON anyway
+                    try:
+                        response_data = json.loads(raw_body)
+                    except json.JSONDecodeError:
+                        raise ValueError(f"Unknown response format (Content-Type: {content_type}): {raw_body}")
 
                 if "error" in response_data:
                     raise RuntimeError(f"RPC Error: {response_data['error']}")
@@ -82,11 +112,11 @@ class MCPBenchmarkClient:
         return self._send_request("initialize", params)
 
     def send_initialized(self):
-        return self._send_request("initialized", {}, is_notification=True)
+        return self._send_request("notifications/initialized", {}, is_notification=True)
 
     def tools_call(self, tool_name, params):
-        method = f"tools/{tool_name}"
-        return self._send_request(method, params)
+        # Use the correct JSON-RPC format for tool calls
+        return self._send_request("tools/call", {"name": tool_name, "arguments": params})
 
 REPO_ROOT = Path(__file__).resolve().parent
 BIN_DIR = REPO_ROOT / ".e2e_bin"
@@ -149,8 +179,10 @@ def main():
         wait_port("127.0.0.1", port)
 
         client = MCPBenchmarkClient("127.0.0.1", port)
-        client.initialize()
+        init_result = client.initialize()
+        print(f"Initialized server: {init_result}")
         client.send_initialized()
+        time.sleep(0.1)  # Give server time to process the initialized notification
 
         print("\nPhase 1: Insert 1,000,000 entities in batches of 10,000")
         print("-" * 60)

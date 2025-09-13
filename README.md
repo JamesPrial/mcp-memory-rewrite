@@ -128,6 +128,63 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## HTTP/Streamable Transport
+
+When using the HTTP mode (`-http` flag), the server implements the MCP Streamable HTTP transport protocol:
+
+### Endpoints
+
+- `GET /` - Server info and available endpoints
+- `GET /healthz` - Health check endpoint
+- `GET /readyz` - Readiness check endpoint
+- `POST /mcp/stream` - MCP Streamable HTTP endpoint (when `-http` is used)
+- `GET /mcp/sse` - MCP Server-Sent Events endpoint (when `-http -sse` is used)
+
+### Session Management
+
+The Streamable HTTP transport uses session IDs to maintain state between requests:
+
+1. **Initialization**: Send an `initialize` request to `/mcp/stream`
+2. **Session ID**: The server returns an `Mcp-Session-Id` header with the response
+3. **Subsequent Requests**: Include the `Mcp-Session-Id` header in all following requests
+4. **Notification**: Send `notifications/initialized` to complete initialization
+
+**Important**: Tool calls and other operations will fail with "invalid during session initialization" if:
+- The session ID is not included in request headers
+- The `notifications/initialized` message hasn't been sent
+
+### Example HTTP Flow
+
+```bash
+# 1. Initialize and capture session ID
+RESPONSE=$(curl -i -X POST http://localhost:8080/mcp/stream \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"initialize","params":{"processId":null,"clientInfo":{"name":"test"},"capabilities":{}},"id":1}')
+
+SESSION_ID=$(echo "$RESPONSE" | grep -i "Mcp-Session-Id:" | cut -d' ' -f2)
+
+# 2. Send initialized notification with session ID
+curl -X POST http://localhost:8080/mcp/stream \
+  -H "Content-Type: application/json" \
+  -H "Mcp-Session-Id: $SESSION_ID" \
+  -d '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}'
+
+# 3. Now you can make tool calls with the session ID
+curl -X POST http://localhost:8080/mcp/stream \
+  -H "Content-Type: application/json" \
+  -H "Mcp-Session-Id: $SESSION_ID" \
+  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"read_graph","arguments":{}},"id":2}'
+```
+
+### Response Formats
+
+The Streamable HTTP transport can return responses in two formats:
+
+- **application/json**: Single JSON-RPC response
+- **text/event-stream**: Server-Sent Events format for streaming responses
+
+The server chooses the format based on the request and whether streaming is beneficial.
+
 ## API
 
 ### Tools

@@ -89,13 +89,56 @@ func run(logger *slog.Logger) error {
 	srvLogger := logger.With(slog.String("component", "server"))
 	srv := server.NewServerWithLogger(db, srvLogger)
 
-	// Create MCP server
+	// Create MCP server with instructions about session management
+	instructions := `MCP Memory Server - Knowledge Graph with SQLite
+
+This server provides a persistent knowledge graph with entities, relations, and observations.
+
+Available tools:
+- create_entities: Create new entities with observations
+- create_relations: Create relations between entities
+- add_observations: Add observations to existing entities
+- delete_entities: Remove entities and their relations
+- delete_observations: Remove specific observations
+- delete_relations: Remove specific relations
+- read_graph: Read the entire knowledge graph
+- search_nodes: Full-text search across entities and observations
+- open_nodes: Retrieve specific entities by name`
+
+	// Add HTTP-specific instructions when running in HTTP mode
+	if *httpAddr != "" {
+		instructions += `
+
+HTTP Transport Endpoints:
+- GET /: Server info and available endpoints
+- GET /healthz: Health check
+- GET /readyz: Readiness check
+- POST /mcp/stream: MCP Streamable HTTP (this endpoint)`
+
+		if *sseMode {
+			instructions += `
+- GET /mcp/sse: MCP Server-Sent Events`
+		}
+
+		instructions += `
+
+Session Management (HTTP):
+1. Initialize: Server returns Mcp-Session-Id header
+2. Include Mcp-Session-Id header in ALL subsequent requests
+3. Send "notifications/initialized" to complete initialization
+4. Tool calls require completed initialization and session ID`
+	}
+
+	mcpOptions := &mcp.ServerOptions{
+		Instructions: instructions,
+	}
+
 	mcpServer := mcp.NewServer(
 		&mcp.Implementation{
 			Name:    MCP_NAME,
 			Version: VERSION,
 		},
-		nil,
+		mcpOptions,
 	)
 
 	// Register all tools
