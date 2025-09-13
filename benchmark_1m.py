@@ -53,10 +53,16 @@ class MCPBenchmarkClient:
                 if not raw_body:
                     raise RuntimeError("Server returned an empty response body, which can happen with a client/server protocol mismatch.")
 
-                if not raw_body.startswith("data:"):
-                    raise ValueError(f"Unexpected response format, expected 'data:': {raw_body}")
+                json_part = None
+                for line in raw_body.splitlines():
+                    if line.startswith("data:"):
+                        # Extract the content after "data:"
+                        json_part = line.split("data:", 1)[1].strip()
+                        break
+                
+                if json_part is None:
+                    raise ValueError(f"Could not find 'data:' line in server response: {raw_body}")
 
-                json_part = raw_body.split("data:", 1)[1].strip()
                 response_data = json.loads(json_part)
 
                 if "error" in response_data:
