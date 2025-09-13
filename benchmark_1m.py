@@ -47,11 +47,17 @@ class MCPBenchmarkClient:
                 if "error" in response_data:
                     raise RuntimeError(f"RPC Error: {response_data['error']}")
                 return response_data.get("result")
+        except urllib.error.HTTPError as e:
+            # This will catch 4xx and 5xx errors and provide a more detailed error.
+            response_body = e.read().decode("utf-8", errors="ignore")
+            raise RuntimeError(
+                f"Request failed with status {e.code} ({e.reason}). Server response: {response_body}"
+            ) from e
         except urllib.error.URLError as e:
-            raise RuntimeError(f"Failed to connect to server at {self.url}: {e}")
+            raise RuntimeError(f"Failed to connect to server at {self.url}: {e.reason}") from e
 
     def initialize(self):
-        params = {"processId": os.getpid(), "clientInfo": {"name": "benchmark-client"}}
+        params = {"processId": None, "clientInfo": {"name": "benchmark-client"}, "capabilities": {}}
         return self._send_request("initialize", params)
 
     def send_initialized(self):
