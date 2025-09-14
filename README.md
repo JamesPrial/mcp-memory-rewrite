@@ -264,9 +264,13 @@ The server chooses the format based on the request and whether streaming is bene
 
 ## Usage with Claude Desktop
 
+Claude Desktop supports both stdio (default) and HTTP transports for MCP servers.
+
+### Stdio Mode (Recommended for local use)
+
 Add this to your `claude_desktop_config.json`:
 
-### Direct Binary
+#### Direct Binary
 
 ```json
 {
@@ -282,7 +286,7 @@ Add this to your `claude_desktop_config.json`:
 }
 ```
 
-### Using Go Run
+#### Using Go Run
 
 ```json
 {
@@ -298,6 +302,49 @@ Add this to your `claude_desktop_config.json`:
 }
 ```
 
+### HTTP Mode (For remote servers or multiple clients)
+
+First, start the server in HTTP mode:
+
+```bash
+# Start on port 8080
+./mcp-memory-server -http :8080
+
+# Or with a specific interface
+./mcp-memory-server -http 127.0.0.1:8080
+```
+
+Then configure Claude Desktop to connect via HTTP:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "url": "http://localhost:8080/mcp/stream"
+    }
+  }
+}
+```
+
+#### Remote Server Configuration
+
+If running the server on a different machine:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "url": "http://your-server-ip:8080/mcp/stream"
+    }
+  }
+}
+```
+
+**Security Note**: When exposing the server over HTTP:
+- Use a firewall to restrict access to trusted IPs
+- Consider using a reverse proxy with authentication
+- For production use, implement proper authentication/authorization
+
 ## VS Code Installation
 
 Add the configuration to your MCP configuration file:
@@ -310,6 +357,8 @@ Alternatively, add to `.vscode/mcp.json` in your workspace.
 
 ### Configuration
 
+#### Stdio Mode (Local)
+
 ```json
 {
   "servers": {
@@ -319,6 +368,18 @@ Alternatively, add to `.vscode/mcp.json` in your workspace.
       "env": {
         "MEMORY_DB_PATH": "/path/to/custom/memory.db"
       }
+    }
+  }
+}
+```
+
+#### HTTP Mode (Remote or Shared)
+
+```json
+{
+  "servers": {
+    "memory": {
+      "url": "http://localhost:8080/mcp/stream"
     }
   }
 }
