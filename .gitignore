@@ -25,6 +25,8 @@ go.work.sum
 # Environment variables
 .env
 .env.local
+venv/
+.venv/
 
 # IDE specific files
 .idea/
