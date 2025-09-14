@@ -13,6 +13,14 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+const (
+	DB_PERMS                = os.FileMode(0755)
+	SQL_DRIVER              = "sqlite3"
+	MAX_OPEN_CONNECTIONS    = 1
+	MAX_IDLE_CONNECTIONS    = 1
+	MAX_CONNECTION_LIFETIME = 0 // Infinite
+)
+
 type DB struct {
 	conn       *sql.DB
 	logger     *slog.Logger
@@ -28,7 +36,7 @@ func NewDBWithLogger(dbPath string, logger *slog.Logger) (*DB, error) {
 	// Ensure the parent directory exists
 	if dbPath != ":memory:" {
 		dir := filepath.Dir(dbPath)
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, DB_PERMS); err != nil {
 			return nil, fmt.Errorf("failed to create database directory: %w", err)
 		}
 	}
@@ -37,15 +45,15 @@ func NewDBWithLogger(dbPath string, logger *slog.Logger) (*DB, error) {
 		slog.String("path", dbPath),
 	)
 
-	conn, err := sql.Open("sqlite3", dbPath)
+	conn, err := sql.Open(SQL_DRIVER, dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
 	// Configure connection pool for SQLite
-	conn.SetMaxOpenConns(1) // SQLite only supports one writer at a time
-	conn.SetMaxIdleConns(1)
-	conn.SetConnMaxLifetime(0) // Connections don't expire
+	conn.SetMaxOpenConns(MAX_OPEN_CONNECTIONS) // SQLite only supports one writer at a time
+	conn.SetMaxIdleConns(MAX_IDLE_CONNECTIONS)
+	conn.SetConnMaxLifetime(MAX_CONNECTION_LIFETIME) // Connections don't expire
 
 	db := &DB{
 		conn:       conn,
@@ -401,7 +409,7 @@ func (db *DB) DeleteEntities(ctx context.Context, entityNames []string) error {
 	}
 
 	placeholders := make([]string, len(entityNames))
-	args := make([]interface{}, len(entityNames))
+	args := make([]any, len(entityNames))
 	for i, name := range entityNames {
 		placeholders[i] = "?"
 		args[i] = name
@@ -729,7 +737,7 @@ func (db *DB) OpenNodes(ctx context.Context, names []string) (*KnowledgeGraph, e
 	// Get relations between opened nodes with optimized query
 	if len(entityIDs) > 0 {
 		placeholders := make([]string, len(entityIDs))
-		relArgs := make([]interface{}, 0, len(entityIDs)*2)
+		relArgs := make([]any, 0, len(entityIDs)*2)
 
 		for i, id := range entityIDs {
 			placeholders[i] = "?"
