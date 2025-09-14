@@ -23,11 +23,5 @@ func Load() (*Config, error) {
 		cfg.DBPath = filepath.Join(homeDir, ".mcp-memory", "memory.db")
 	}
 
-	// Ensure the directory exists
-	dir := filepath.Dir(cfg.DBPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, err
-	}
-
 	return cfg, nil
 }
